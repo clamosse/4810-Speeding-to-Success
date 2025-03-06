@@ -2,23 +2,23 @@ library(tidyverse)
 library(plotly)
 library(janitor)
 
-player_play <- read.csv('data/player_play.csv')
-players <- read.csv('data/players.csv')
-plays <- read.csv('data/plays.csv')
+player_play <- read.csv('data/BDB-2025-data/player_play.csv')
+players <- read.csv('data/BDB-2025-data/players.csv')
+plays <- read.csv('data/BDB-2025-data/plays.csv')
 
 combine <- read.csv('data/filtered_combine.csv')
 
 # Loading all tracking data - don't run this
 rbind(
-  read.csv('data/tracking_week_1.csv'),
-  read.csv('data/tracking_week_2.csv'),
-  read.csv('data/tracking_week_3.csv'),
-  read.csv('data/tracking_week_4.csv'),
-  read.csv('data/tracking_week_5.csv'),
-  read.csv('data/tracking_week_6.csv'),
-  read.csv('data/tracking_week_7.csv'),
-  read.csv('data/tracking_week_8.csv'),
-  read.csv('data/tracking_week_9.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_1.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_2.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_3.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_4.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_5.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_6.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_7.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_8.csv'),
+  read.csv('data/BDB-2025-data/tracking_week_9.csv'),
 ) -> tracking
 
 # getting the different types of routes ran
@@ -60,7 +60,7 @@ stringdist_left_join(
 
 # Week 1 example
 #############################################
-week1 <- read.csv('data/tracking_week_1.csv')
+week1 <- read.csv('data/BDB-2025-data/tracking_week_1.csv')
 # get gameIds from week 1
 week1_gameIds <- week1 |> pull(gameId) |> unique()
 
