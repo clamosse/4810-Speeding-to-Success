@@ -8,6 +8,12 @@ plays <- read.csv('data/BDB-2025-data/plays.csv')
 
 combine <- read.csv('data/filtered_combine.csv')
 
+# turn Ht into total inches (numeric)
+combine <- combine %>%
+  separate(Ht, into = c("feet", "inches"), sep = "-", convert = TRUE) %>%
+  mutate(total_inches = feet * 12 + inches) %>%
+  select(-feet, -inches)
+
 # Loading all tracking data - don't run this
 rbind(
   read.csv('data/BDB-2025-data/tracking_week_1.csv'),
@@ -46,7 +52,8 @@ table(route_runners$position)
 
 library(fuzzyjoin)
 
-# 
+#  shows all players that seem to not be in the combine, there could be some names that
+# dont match, but likely almost everyone in the list did not participate in the combine
 stringdist_left_join(
   x = route_runners,
   y = combine,
@@ -56,6 +63,9 @@ stringdist_left_join(
   filter(is.na(X)) |> arrange(desc(n_routes)) |> View()
 
 
+# check normality of height and weight
+hist(combine$total_inches)
+hist(combine$Wt)
 
 
 # Week 1 example
