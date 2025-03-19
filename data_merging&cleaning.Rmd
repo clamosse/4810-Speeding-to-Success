@@ -1,0 +1,121 @@
+---
+title: "data_merging/cleaning"
+output: html_document
+date: "2025-03-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(fuzzyjoin)
+library(tidyverse)
+library(plotly)
+library(janitor)
+library(corrplot)
+```
+
+
+read files
+```{r}
+player_play <- read.csv('data/player_play.csv')
+players <- read.csv('data/players.csv')
+plays <- read.csv('data/plays.csv')
+combine <- read.csv('data/filtered_combine.csv')
+```
+
+get all route runners from weeks 1-9
+```{r}
+player_play |> 
+  filter(
+    !is.na(wasRunningRoute),
+    wasRunningRoute == 1
+  ) |> 
+  dplyr::select(nflId) |> 
+  group_by(nflId) |> 
+  summarize(n_routes = n()) |> 
+  left_join(
+    y = players,
+    by = "nflId"
+  ) -> route_runners
+
+route_runners <- route_runners %>%
+  separate(height, into = c("feet", "inches"), sep = "-", convert = TRUE) %>%
+  mutate(total_inches = feet * 12 + inches) %>%
+  select(-feet, -inches)
+```
+
+
+
+all route runners + combine stats 
+```{r}
+route_runners_cobine <- stringdist_left_join(
+  x = route_runners,
+  y = combine,
+  by = c('displayName' = 'Player'),
+  distance_col = 'string_dist'
+) %>% select(nflId,n_routes,position,displayName, weight, X40yd, X3Cone, Shuttle, total_inches)
+
+```
+
+
+looking at how missing values correlate with players performance (measured by number of routes ran)
+```{r}
+
+# all players with missing values
+# 301
+missing_value_players <- route_runners_cobine %>% filter(if_any(everything(), is.na))
+
+# players with no missing values
+# 192
+full_data_players <- route_runners_cobine %>% drop_na()
+
+# players with 2 or less missing values
+# 313
+two_missing_max <- route_runners_cobine %>% filter(rowSums(is.na(.)) <= 2)
+
+
+df1 <- missing_value_players %>% select(n_routes) %>% mutate(cat = "missing")
+df2 <- full_data_players %>% select(n_routes) %>% mutate(cat = "full")
+df3 <- two_missing_max %>% select(n_routes) %>% mutate(cat = "2 missing")
+
+
+df_combined <- bind_rows(df1, df2,df3)
+
+# Create the violin plot
+ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
+  geom_violin(trim = FALSE) +  # Use trim=FALSE to show the full distribution
+  scale_y_continuous(expand = c(0, 0)) +  # Ensures the same scale for y-axis
+  theme_minimal() +
+  labs(title = "Comparison of Two Variables", y = "Value", x = "Category") +
+  theme(legend.position = "none")
+```
+we see that players that are missing 2 values or less have a very similar distribution of number of routes ran as players that have no missing values
+
+
+```{r}
+cor_matrix <- cor(route_runners_cobine %>% select(where(is.numeric)), use = "complete.obs")
+corrplot(cor_matrix, method = "circle")
+```
+
+imputing missing data, if we used all data, it would likely be too sparse, so we can lose a few players (hopefully uncorrelated) so we can have better data (754 missing values to 220 missing values), so we are only using players that are only missing 2 or less values
+```{r}
+install.packages('mice')
+library(mice)
+
+colSums(is.na(route_runners_cobine))
+colSums(is.na(two_missing_max))
+
+sum(is.na(route_runners_cobine))
+sum(is.na(two_missing_max))
+
+imputed_df <- mice(two_missing_max, method = "pmm")
+imputed_rr_combine <- complete(imputed_df)
+
+```
+
+
+```{r}
+
+```
