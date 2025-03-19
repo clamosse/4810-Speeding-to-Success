@@ -94,8 +94,18 @@ ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
 we see that players that are missing 2 values or less have a very similar distribution of number of routes ran as players that have no missing values
 
 
+looking at how values (and missing values) may be correlated
 ```{r}
-cor_matrix <- cor(route_runners_cobine %>% select(where(is.numeric)), use = "complete.obs")
+binary_missing <- route_runners_cobine
+
+binary_missing$missing40yd <- ifelse(is.na(route_runners_cobine$X40yd), 1, 0)
+binary_missing$missing3Cone <- ifelse(is.na(route_runners_cobine$X3Cone), 1, 0)
+binary_missing$missingShuttle <- ifelse(is.na(route_runners_cobine$Shuttle), 1, 0)
+```
+
+
+```{r}
+cor_matrix <- cor(binary_missing %>% select(where(is.numeric)), use = "pairwise.complete.obs")
 corrplot(cor_matrix, method = "circle")
 ```
 
