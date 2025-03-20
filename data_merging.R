@@ -78,6 +78,18 @@ player_play |>
   ) |> 
   filter(frameType == 'AFTER_SNAP') -> route_running_frames
 
+player_play |> 
+  filter(
+    !is.na(pff_defensiveCoverageAssignment),
+    gameId %in% week1_gameIds
+  ) |> 
+  dplyr::select(gameId, playId, nflId, pff_defensiveCoverageAssignment, pff_primaryDefensiveCoverageMatchupNflId) |> 
+  left_join(
+    week1,
+    by = c("gameId", "playId", "nflId")
+  ) |> 
+  filter(frameType == 'AFTER_SNAP') -> coverage_frames
+
 
 # each play location of ball at snap
 week1 |> 
@@ -97,8 +109,16 @@ route_running_frames |>
   filter(is.na(route_end_event)) |> # TODO: test to see if any plays are dropped
   select(-route_end_event) -> filtered_route_frames
 
-write.csv(filtered_route_frames, 'route_frames.csv', row.names=F)
+coverage_frames |> 
+  mutate(route_end_event = ifelse(event %in% route_ending_events, TRUE, NA)) |> 
+  group_by(gameId, playId, nflId) |> 
+  fill(route_end_event) |>
+  filter(is.na(route_end_event)) |> # TODO: test to see if any plays are dropped
+  select(-route_end_event) -> filtered_coverage_frames
 
+
+write.csv(filtered_route_frames, 'route_frames.csv', row.names=F)
+write.csv(filtered_coverage_frames, 'coverage_frames.csv', row.names=F)
 
 
 
