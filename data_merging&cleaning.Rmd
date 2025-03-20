@@ -14,14 +14,15 @@ library(tidyverse)
 library(plotly)
 library(janitor)
 library(corrplot)
+library(fastDummies)
 ```
 
 
 read files
 ```{r}
-player_play <- read.csv('data/player_play.csv')
-players <- read.csv('data/players.csv')
-plays <- read.csv('data/plays.csv')
+player_play <- read.csv('data/BDB-2025-data/player_play.csv')
+players <- read.csv('data/BDB-2025-data/players.csv')
+plays <- read.csv('data/BDB-2025-data/plays.csv')
 combine <- read.csv('data/filtered_combine.csv')
 ```
 
@@ -44,88 +45,97 @@ route_runners <- route_runners %>%
   separate(height, into = c("feet", "inches"), sep = "-", convert = TRUE) %>%
   mutate(total_inches = feet * 12 + inches) %>%
   select(-feet, -inches)
+
+write.csv(route_runners %>% select(nflId), "data/route_runner_Ids.csv", row.names = FALSE)
 ```
 
 
 
 all route runners + combine stats 
 ```{r}
-route_runners_cobine <- stringdist_left_join(
+route_runners_combine <- stringdist_left_join(
   x = route_runners,
   y = combine,
   by = c('displayName' = 'Player'),
   distance_col = 'string_dist'
 ) %>% select(nflId,n_routes,position,displayName, weight, X40yd, X3Cone, Shuttle, total_inches)
 
+route_runners_combine <- dummy_cols(route_runners_combine, select_columns = "position", remove_first_dummy = F, remove_selected_columns = T)
+
 ```
 
 
 looking at how missing values correlate with players performance (measured by number of routes ran)
 ```{r}
-
 # all players with missing values
 # 301
-missing_value_players <- route_runners_cobine %>% filter(if_any(everything(), is.na))
+missing_value_players <- route_runners_combine %>% filter(if_any(everything(), is.na))
 
 # players with no missing values
 # 192
-full_data_players <- route_runners_cobine %>% drop_na()
+full_data_players <- route_runners_combine %>% drop_na()
 
 # players with 2 or less missing values
 # 313
-two_missing_max <- route_runners_cobine %>% filter(rowSums(is.na(.)) <= 2)
+two_missing_max <- route_runners_combine %>% filter(rowSums(is.na(.)) <= 2)
 
 
-df1 <- missing_value_players %>% select(n_routes) %>% mutate(cat = "missing")
-df2 <- full_data_players %>% select(n_routes) %>% mutate(cat = "full")
+df1 <- missing_value_players %>% select(n_routes) %>% mutate(cat = "all missing")
+df2 <- full_data_players %>% select(n_routes) %>% mutate(cat = "0 missing")
 df3 <- two_missing_max %>% select(n_routes) %>% mutate(cat = "2 missing")
 
 
 df_combined <- bind_rows(df1, df2,df3)
 
 # Create the violin plot
-ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
-  geom_violin(trim = FALSE) +  # Use trim=FALSE to show the full distribution
-  scale_y_continuous(expand = c(0, 0)) +  # Ensures the same scale for y-axis
+p = ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
+  geom_violin(trim = FALSE) + 
+  scale_y_continuous(expand = c(0, 0)) +
   theme_minimal() +
-  labs(title = "Comparison of Two Variables", y = "Value", x = "Category") +
+  labs(title = "Comparison of Two Variables", y = "preformance (num routes)", x = "number of missing combine speed stats") +
   theme(legend.position = "none")
+
+ggsave("Pre Exploratory Graphs/Effects of missing combine values on preformance.png", plot = p, width = 8, height = 6, dpi = 300)
 ```
 we see that players that are missing 2 values or less have a very similar distribution of number of routes ran as players that have no missing values
 
 
-looking at how values (and missing values) may be correlated, is there correlation with missing values? for example, do we see a positive correlation between missing values and player performance (measured by number of routes run)
-```{r}
-binary_missing <- route_runners_cobine
-
-binary_missing$missing40yd <- ifelse(is.na(route_runners_cobine$X40yd), 1, 0)
-binary_missing$missing3Cone <- ifelse(is.na(route_runners_cobine$X3Cone), 1, 0)
-binary_missing$missingShuttle <- ifelse(is.na(route_runners_cobine$Shuttle), 1, 0)
-```
-
-
-```{r}
-cor_matrix <- cor(binary_missing %>% select(where(is.numeric)), use = "pairwise.complete.obs")
-corrplot(cor_matrix, method = "circle")
-```
-
 imputing missing data, if we used all data, it would likely be too sparse, so we can lose a few players (hopefully uncorrelated) so we can have better data (754 missing values to 220 missing values), so we are only using players that are only missing 2 or less values
 ```{r}
-install.packages('mice')
-library(mice)
-
-colSums(is.na(route_runners_cobine))
+colSums(is.na(route_runners_combine))
 colSums(is.na(two_missing_max))
 
-sum(is.na(route_runners_cobine))
+sum(is.na(route_runners_combine))
 sum(is.na(two_missing_max))
 
 imputed_df <- mice(two_missing_max, method = "pmm")
 imputed_rr_combine <- complete(imputed_df)
+```
 
+
+looking at how values (and missing values) may be correlated, is there correlation with missing values? for example, do we see a positive correlation between missing values and player performance (measured by number of routes run)
+```{r}
+route_runners_combine$missing40yd <- ifelse(is.na(route_runners_combine$X40yd), 1, 0)
+route_runners_combine$missing3Cone <- ifelse(is.na(route_runners_combine$X3Cone), 1, 0)
+route_runners_combine$missingShuttle <- ifelse(is.na(route_runners_combine$Shuttle), 1, 0)
 ```
 
 
 ```{r}
+cor_matrix <- cor(route_runners_combine %>% select(where(is.numeric)), use = "pairwise.complete.obs")
+
+pdf("Pre Exploratory Graphs/correlation_plot.pdf")
+corrplot(cor_matrix, method = "circle")
+dev.off()
+```
+
+our first data set is 'route_runners_combine' which is all route runners and their combine stats, with this we will likely do separate analysis on each combine stat in a way to deal with missing values)
+
+our second data set is 'imputed_rr_combine' which includes only route runners who have 2 or less missing combine values, then all the missing values are imputed
+```{r}
+
+route_runners_combine
+
+imputed_rr_combine
 
 ```
