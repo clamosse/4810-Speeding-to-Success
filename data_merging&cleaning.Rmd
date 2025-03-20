@@ -94,7 +94,7 @@ ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
 we see that players that are missing 2 values or less have a very similar distribution of number of routes ran as players that have no missing values
 
 
-looking at how values (and missing values) may be correlated
+looking at how values (and missing values) may be correlated, is there correlation with missing values? for example, do we see a positive correlation between missing values and player performance (measured by number of routes run)
 ```{r}
 binary_missing <- route_runners_cobine
 
