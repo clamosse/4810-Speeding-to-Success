@@ -21,7 +21,7 @@ targeted_route_runners <-
 # Table of routes ran
 table(targeted_route_runners$routeRan)
 
-# Route types holds each unique route type
+# route_types holds each unique route type
 route_types <- unique(targeted_route_runners$routeRan)
 
 # route_data_frames list to hold data for each route type
@@ -93,7 +93,7 @@ targeted_route_running_frames <-
          -max_valid_frame) |>
   ungroup()
 ## Removed 727,995 frames
-## I filtered out frames for each route type where players where never targeted
+## I filtered out frames for each route type where players were never targeted
 ## Could potentially do a more aggressive frame removal, find other ways to differentiate routes
 
 write.csv(targeted_route_running_frames, 'targeted_route_frames.csv', row.names = F)
