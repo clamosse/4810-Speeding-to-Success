@@ -21,7 +21,7 @@ targeted_route_runners <-
 # Table of routes ran
 table(targeted_route_runners$routeRan)
 
-# Route types holds each unique route type
+# route_types holds each unique route type
 route_types <- unique(targeted_route_runners$routeRan)
 
 # route_data_frames list to hold data for each route type
@@ -35,8 +35,9 @@ for (route in route_types) {
 # Count frames until pass towards targeted receiver for each play in each route type
 count_frames_until_pass <- function(df) {
   df |> 
-    group_by(playId) |> 
-    mutate(first_pass_frame = ifelse(any(event == "pass_forward"), min(frameId[event == "pass_forward"], na.rm = TRUE), NA),
+    group_by(playId,
+             gameId) |> 
+    mutate(first_pass_frame = ifelse(any(event == "pass_forward" | event == "pass_shovel"), min(frameId[event == "pass_forward" | event == "pass_shovel"], na.rm = TRUE), NA),
            frames_until_pass = ifelse(!is.na(first_pass_frame), first_pass_frame - min(frameId, na.rm = TRUE), NA)) |> 
     ungroup() |> 
     select(-first_pass_frame)
@@ -58,7 +59,8 @@ route_summary <-
   route_data_frames |> 
   bind_rows(.id = "route_type") |> 
   group_by(route_type,
-           playId) |> 
+           playId,
+           gameId) |> 
   slice(1) |> 
   ungroup() |> 
   group_by(route_type) |> 
@@ -93,7 +95,7 @@ targeted_route_running_frames <-
          -max_valid_frame) |>
   ungroup()
 ## Removed 727,995 frames
-## I filtered out frames for each route type where players where never targeted
+## I filtered out frames for each route type where players were never targeted
 ## Could potentially do a more aggressive frame removal, find other ways to differentiate routes
 
 write.csv(targeted_route_running_frames, 'targeted_route_frames.csv', row.names = F)
