@@ -59,7 +59,8 @@ route_summary <-
   route_data_frames |> 
   bind_rows(.id = "route_type") |> 
   group_by(route_type,
-           playId) |> 
+           playId,
+           gameId) |> 
   slice(1) |> 
   ungroup() |> 
   group_by(route_type) |> 
