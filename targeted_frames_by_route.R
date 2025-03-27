@@ -82,7 +82,8 @@ targeted_route_running_frames <-
   inner_join(route_summary, 
              by = c("routeRan" = "route_type")) |> 
   group_by(routeRan, 
-           playId) |> 
+           playId,
+           gameId) |> 
   mutate(start_frame = min(frameId, na.rm = TRUE),  # Get first frameId of the play
          end_frame = max(frameId, na.rm = TRUE),    # Get last frameId of the play
          min_valid_frame = start_frame + (min_frames),  
@@ -94,7 +95,7 @@ targeted_route_running_frames <-
          -min_valid_frame,
          -max_valid_frame) |>
   ungroup()
-## Removed 727,995 frames
+## Removed 504,465 frames
 ## I filtered out frames for each route type where players were never targeted
 ## Could potentially do a more aggressive frame removal, find other ways to differentiate routes
 
