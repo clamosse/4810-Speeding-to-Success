@@ -100,6 +100,8 @@ df5 <- all_missing %>% select(n_routes) %>%  mutate(cat = "all 3 missing")
 
 
 df_combined <- bind_rows(df1,df2,df4,df5)
+                         
+df_combined$cat <- factor(df_combined$cat, levels = c("all players", "0 missing", "up to 2 missing", 'all 3 missing'))
 
 # Create the violin plot
 p = ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
@@ -117,22 +119,22 @@ we see that players that are missing 2 values or less have a very similar distri
 
 ```{r}
 
-missing_combine <- as.numeric(unlist(df1['n_routes']))
-full_combine <- as.numeric(unlist(df2['n_routes']))
-missing_2_combine <- as.numeric(unlist(df3['n_routes']))
+all_players <- as.numeric(unlist(df1['n_routes']))
+full_combine_players <- as.numeric(unlist(df2['n_routes']))
+missing_2_max_combine <- as.numeric(unlist(df4['n_routes']))
 
 
-hist(missing_combine)
-hist(full_combine)
-hist(missing_2_combine)
+hist(all_players)
+hist(full_combine_players)
+hist(missing_2_max_combine)
 
-wilcox.test(full_combine, missing_combine, paired = FALSE)
+wilcox.test(full_combine_players, missing_2_max_combine, paired = FALSE)
 
-wilcox.test(full_combine, missing_2_combine, paired = FALSE)
+wilcox.test(full_combine_players, all_players, paired = FALSE)
 
 
 ```
-we see that there is a statistically significant difference between players with full combine results and players with no combine results, however there is no statistically significant difference between players with partial and full combine results.
+we see that there is not a statistically significant difference in the number of routes ran (and by proxy receiver performance) between players with all speed combine stats recorded and players with missing a max of 2 speed combine stats recorded. however there is a statistically significant difference in the number of routes ran (and by proxy receiver performance) between players with all speed combine stats recorded and players with 0 speed combine stats recorded.
 
 
 
