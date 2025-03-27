@@ -36,7 +36,7 @@ for (route in route_types) {
 count_frames_until_pass <- function(df) {
   df |> 
     group_by(playId) |> 
-    mutate(first_pass_frame = ifelse(any(event == "pass_forward"), min(frameId[event == "pass_forward"], na.rm = TRUE), NA),
+    mutate(first_pass_frame = ifelse(any(event == "pass_forward" | event == "pass_shovel"), min(frameId[event == "pass_forward" | event == "pass_shovel"], na.rm = TRUE), NA),
            frames_until_pass = ifelse(!is.na(first_pass_frame), first_pass_frame - min(frameId, na.rm = TRUE), NA)) |> 
     ungroup() |> 
     select(-first_pass_frame)
