@@ -92,14 +92,14 @@ count(two_missing_max)
 all_missing <- route_runners_combine %>% filter(rowSums(is.na(.)) == 3)
 count(all_missing)
 
-
-df1 <- missing_value_players %>% select(n_routes) %>% mutate(cat = "any missing")
+df1 <- route_runners_combine %>% select(n_routes) %>% mutate(cat = 'all players')
 df2 <- full_data_players %>% select(n_routes) %>% mutate(cat = "0 missing")
-df3 <- two_missing_max %>% select(n_routes) %>% mutate(cat = "2 missing")
-df4 <- all_missing %>% select(n_routes) %>%  mutate(cat = "3 missing")
+#df3 <- missing_value_players %>% select(n_routes) %>% mutate(cat = "1,2,3 missing")
+df4 <- two_missing_max %>% select(n_routes) %>% mutate(cat = "up to 2 missing")
+df5 <- all_missing %>% select(n_routes) %>%  mutate(cat = "all 3 missing")
 
 
-df_combined <- bind_rows(df1, df2,df3,df4)
+df_combined <- bind_rows(df1,df2,df4,df5)
 
 # Create the violin plot
 p = ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
