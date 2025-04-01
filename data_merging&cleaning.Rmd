@@ -18,6 +18,7 @@ library(fastDummies)
 library(mice)
 library(naniar)
 library(car)
+library(glmnet)
 ```
 
 
@@ -108,7 +109,7 @@ p = ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
   geom_violin(trim = FALSE) + 
   scale_y_continuous(expand = c(0, 0)) +
   theme_minimal() +
-  labs(title = "Comparison of Two Variables", y = "preformance (num routes)", x = "number of missing combine speed stats") +
+  labs(title = "Missing Speed Combine Stats vs Reciever Preformance", y = "Preformance (num routes)", x = "Number of missing combine speed stats") +
   theme(legend.position = "none")
 
 p
@@ -202,6 +203,39 @@ route_runners_combine
 
 write.csv(route_runners_combine, "data/route_runners_combine.csv", row.names = FALSE)
 
-imputed_rr_combine
+imputed_rr_combine <- imputed_rr_combine %>% select(-c('missing40yd','missing3Cone','missingShuttle'))
+
+```
+
+
+
+```{r}
+player_aggregated_openess <- read.csv('data/player_aggregated2.csv')
+
+hist(player_aggregated_openess$mean)
+```
+
+
+```{r}
+
+double_mean_openess_and_combine <- right_join(
+  x = player_aggregated_openess,
+  y = imputed_rr_combine,
+  by = c('nflId'),
+) %>% filter(count >= 1) %>% select(-c('nflId','count','n_routes','displayName'))
+
+colMeans(double_mean_openess_and_combine)
+
+scaled_data <- double_mean_openess_and_combine %>% mutate_at(c("weight", "total_inches", "X40yd","X3Cone","Shuttle"), ~(scale(.) %>% as.vector))
+
+
+x_var <- double_mean_openess_and_combine %>% select(-c('nflId','count','n_routes','displayName','mean'))
+y_var <- double_mean_openess_and_combine$mean
+
+fit <- lm(mean ~ . - 1, data = scaled_data)
+fit
+summary(fit)
+
+#TODO look into repeated measures regression
 
 ```
