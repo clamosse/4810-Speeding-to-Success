@@ -226,15 +226,17 @@ double_mean_openess_and_combine <- right_join(
   x = player_aggregated_openess,
   y = scaled_data,
   by = c('nflId'),
-) %>% filter(count >= 1) %>% select(-c('nflId','count','n_routes','displayName'))
+) %>% filter(count >= 1) %>% select(-c('count','n_routes','displayName'))
 
 colMeans(double_mean_openess_and_combine)
+
+write.csv(double_mean_openess_and_combine, "data/double_mean_openess_and_scaled_combine.csv", row.names = FALSE)
 
 x_var <- double_mean_openess_and_combine %>% select(-c('nflId','count','n_routes','displayName','mean'))
 y_var <- double_mean_openess_and_combine$mean
 
 # using scaled combine stats
-fit <- lm(mean ~ . - 1, data = double_mean_openess_and_combine)
+fit <- lm(mean ~ . - 1 - nflId, data = double_mean_openess_and_combine)
 fit
 summary(fit)
 
