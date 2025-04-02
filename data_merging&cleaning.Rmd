@@ -20,6 +20,7 @@ library(naniar)
 library(car)
 library(glmnet)
 library(lme4)
+library(caret)
 ```
 
 
@@ -224,21 +225,33 @@ scaled_data <- imputed_rr_combine %>% mutate_at(c("weight", "total_inches", "X40
 
 double_mean_openess_and_combine <- right_join(
   x = player_aggregated_openess,
-  y = scaled_data,
+  y = imputed_rr_combine,
   by = c('nflId'),
 ) %>% filter(count >= 1) %>% select(-c('count','n_routes','displayName'))
 
-colMeans(double_mean_openess_and_combine)
+# can also look at bmi as height and weight are highly colinear, however we can see diffrent results for height and weight when looking at positions, ie. for one position we see you want to be shorter and heavier, but for another you want to be taller and heavier
 
-write.csv(double_mean_openess_and_combine, "data/double_mean_openess_and_scaled_combine.csv", row.names = FALSE)
+# double_mean_openess_and_combine <-  double_mean_openess_and_combine %>% mutate(BMI = (weight / total_inches ^2)) %>% select(-c('weight','total_inches'))
 
-x_var <- double_mean_openess_and_combine %>% select(-c('nflId','count','n_routes','displayName','mean'))
-y_var <- double_mean_openess_and_combine$mean
+scaled_data <- double_mean_openess_and_combine %>% mutate_at(c("weight","total_inches", "X40yd","X3Cone","Shuttle"), ~(scale(.) %>% as.vector))
 
-# using scaled combine stats
-fit <- lm(mean ~ . - 1 - nflId, data = double_mean_openess_and_combine)
-fit
-summary(fit)
+write.csv(scaled_data, "data/double_mean_openess_and_scaled_combine.csv", row.names = FALSE)
+
+df_wr <- scaled_data %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_rb <- scaled_data %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_te <- scaled_data %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+
+
+model_wr <- lm(mean ~ . - 1 - nflId, data = df_wr)
+model_rb <- lm(mean ~ . - 1 - nflId, data = df_rb)
+model_te <- lm(mean ~ . - 1 - nflId, data = df_te)
+
+summary(model_wr)
+
+summary(model_rb)
+
+summary(model_te)
+
 
 #TODO look into repeated measures regression
 
