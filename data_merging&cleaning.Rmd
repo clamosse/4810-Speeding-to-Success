@@ -21,6 +21,8 @@ library(car)
 library(glmnet)
 library(lme4)
 library(caret)
+library(broom)
+library(ggplot2)
 ```
 
 
@@ -49,12 +51,6 @@ player_play |>
   ) -> route_runners
 
 
-route_runners <- route_runners %>%
-  separate(height, into = c("feet", "inches"), sep = "-", convert = TRUE) %>%
-  mutate(total_inches = feet * 12 + inches) %>%
-  select(-feet, -inches) %>% 
-  filter(position %in% c('TE','WR','RB'))
-
 write.csv(route_runners %>% select(nflId), "data/route_runner_Ids.csv", row.names = FALSE)
 ```
 
@@ -62,12 +58,27 @@ write.csv(route_runners %>% select(nflId), "data/route_runner_Ids.csv", row.name
 
 all route runners + combine stats 
 ```{r}
+
+combine <- combine %>%
+  separate(Ht, into = c("feet", "inches"), sep = "-", convert = TRUE) %>%
+  mutate(total_inches = feet * 12 + inches) %>%
+  select(-feet, -inches) %>% 
+  rename('weight' = Wt)
+
+
+# TODO need to impute here, can still check things on original data below but imputating should happen before filtering
+
+scaled_combine <- combine %>% mutate_at(c("weight","total_inches", "X40yd","X3Cone","Shuttle"), ~(scale(.) %>% as.vector))
+
 route_runners_combine <- stringdist_left_join(
   x = route_runners,
-  y = combine,
+  y = scaled_combine,
   by = c('displayName' = 'Player'),
-  distance_col = 'string_dist'
-) %>% select(nflId,n_routes,position,displayName, weight, X40yd, X3Cone, Shuttle, total_inches)
+  distance_col = 'string_dist') %>%
+  rename('weight' = weight.y) %>% 
+  select(nflId,n_routes,position,displayName, weight, X40yd, X3Cone, Shuttle, total_inches) %>% 
+  filter(position %in% c("TE","RB","WR"))
+
 
 route_runners_combine <- dummy_cols(route_runners_combine, select_columns = "position", remove_first_dummy = F, remove_selected_columns = T)
 ```
@@ -125,11 +136,13 @@ we see that players that are missing 2 values or less have a very similar distri
 all_players <- as.numeric(unlist(df1['n_routes']))
 full_combine_players <- as.numeric(unlist(df2['n_routes']))
 missing_2_max_combine <- as.numeric(unlist(df4['n_routes']))
+all_missing_players <- as.numeric(unlist(df5['n_routes']))
 
 
 hist(all_players)
 hist(full_combine_players)
 hist(missing_2_max_combine)
+hist(all_missing_players)
 
 wilcox.test(full_combine_players, missing_2_max_combine, paired = FALSE)
 
@@ -205,7 +218,7 @@ route_runners_combine
 
 write.csv(route_runners_combine, "data/route_runners_combine.csv", row.names = FALSE)
 
-imputed_rr_combine <- imputed_rr_combine %>% select(-c('missing40yd','missing3Cone','missingShuttle'))
+imputed_rr_combine 
 
 ```
 
@@ -220,26 +233,23 @@ hist(player_aggregated_openess$mean)
 
 ```{r}
 
-scaled_data <- imputed_rr_combine %>% mutate_at(c("weight", "total_inches", "X40yd","X3Cone","Shuttle"), ~(scale(.) %>% as.vector))
-
 
 double_mean_openess_and_combine <- right_join(
   x = player_aggregated_openess,
   y = imputed_rr_combine,
   by = c('nflId'),
-) %>% filter(count >= 1) %>% select(-c('count','n_routes','displayName'))
+) %>% filter(count >= 1) %>% select(-c('count','displayName'))
 
 # can also look at bmi as height and weight are highly colinear, however we can see diffrent results for height and weight when looking at positions, ie. for one position we see you want to be shorter and heavier, but for another you want to be taller and heavier
 
 # double_mean_openess_and_combine <-  double_mean_openess_and_combine %>% mutate(BMI = (weight / total_inches ^2)) %>% select(-c('weight','total_inches'))
 
-scaled_data <- double_mean_openess_and_combine %>% mutate_at(c("weight","total_inches", "X40yd","X3Cone","Shuttle"), ~(scale(.) %>% as.vector))
 
-write.csv(scaled_data, "data/double_mean_openess_and_scaled_combine.csv", row.names = FALSE)
+write.csv(double_mean_openess_and_combine, "data/double_mean_openess_and_scaled_combine.csv", row.names = FALSE)
 
-df_wr <- scaled_data %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR"))
-df_rb <- scaled_data %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR"))
-df_te <- scaled_data %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_wr <- double_mean_openess_and_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
+df_rb <- double_mean_openess_and_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
+df_te <- double_mean_openess_and_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
 
 
 model_wr <- lm(mean ~ . - 1 - nflId, data = df_wr)
@@ -252,8 +262,52 @@ summary(model_rb)
 
 summary(model_te)
 
+par(mfrow = c(2, 2))
+plot(model_wr, main = "Diagnostics for WR Model")
+plot(model_rb, main = "Diagnostics for RB Model")
+plot(model_te, main = "Diagnostics for TE Model")
 
-#TODO look into repeated measures regression
+# we may need to look into fixing heteroscedasticity, scale location plot looks very bad
+# could scale y values?
+
+
+
+#TODO look into repeated measures regression or mixed effect models
+
+```
+
+```{r}
+
+tidy_wr <- tidy(model_wr)
+tidy_rb <- tidy(model_rb)
+tidy_te <- tidy(model_te)
+
+tidy_wr$position <- "WR"
+tidy_rb$position <- "RB"
+tidy_te$position <- "TE"
+
+tidy_all <- rbind(tidy_wr, tidy_rb, tidy_te)
+
+p = ggplot(tidy_all, aes(x = term, y = estimate, color = position)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error),
+                width = 0.2, position = position_dodge(width = 0.5)) +
+  coord_flip() +
+  labs(title = "Simple LM Regression Coefficients by Position",
+       x = "Predictor",
+       y = "Estimated Coefficient") +
+  theme_minimal()
+
+p 
+
+
+ggsave("Pre Exploratory Graphs/LM_regression_coefficients_by_position.png", plot = p, width = 8, height = 6, dpi = 300)
+
+```
+
+```{r}
+
+
 
 ```
 
@@ -272,21 +326,39 @@ player_combine_opennes_per_play <- left_join(
   x = player_per_play_openess,
   y = scaled_data,
   by = c('nflId'),
-) %>% filter(n_routes >= 1) %>% select(-c(,'X'))
+) %>% filter(n_routes >= 1) %>% select(-c(,'X','mean.x','n_routes'))
 
 
 player_combine_opennes_per_play <- left_join(
   x = player_combine_opennes_per_play,
   y = player_play,
   by = c('gameId','playId','nflId'),
-)%>% select(c('mean','position_RB','position_TE','position_WR',"weight","X40yd","X3Cone","Shuttle","total_inches","routeRan.y","nflId"))
+) %>% select(c('mean.y','position_RB','position_TE','position_WR',"weight","X40yd","X3Cone","Shuttle","total_inches","routeRan","nflId"))
 
-player_combine_opennes_per_play <- dummy_cols(player_combine_opennes_per_play, select_columns = "routeRan.y", remove_first_dummy = F, remove_selected_columns = T)
+player_combine_opennes_per_play <- dummy_cols(player_combine_opennes_per_play, select_columns = "routeRan.x", remove_first_dummy = F, remove_selected_columns = T)
 
 
-fit <- lmer(mean ~ . - nflId + (1 | nflId) - 1, data = player_combine_opennes_per_play)
-fit
-summary(fit)
+colSums(player_combine_opennes_per_play)
+
+df_wr <- player_combine_opennes_per_play %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_rb <- player_combine_opennes_per_play %>% filter(position_RB == 1)%>% select(-c("position_RB","position_TE","position_WR"))
+df_te <- player_combine_opennes_per_play %>% filter(position_TE == 1)%>% select(-c("position_RB","position_TE","position_WR"))
+
+model_wr <- lmer(mean.y ~ (weight + X40yd + X3Cone + Shuttle + total_inches) * routeRan
+                + (1 | nflId), data = df_wr)
+
+model_rb <- lmer(mean.y ~ weight + X40yd + X3Cone + Shuttle + total_inches +
+                 dummy_routeRan1 + dummy_routeRan2 + ... +
+                 (1 | nflId),
+                 data = df_rb)
+model_te <- lmer(mean.y ~ weight + X40yd + X3Cone + Shuttle + total_inches +
+                 dummy_routeRan1 + dummy_routeRan2 + ... +
+                 (1 | nflId),
+                 data = df_te)
+
+summary(model_wr)
+  summary(model_rb)
+summary(model_te)
 
 
 
