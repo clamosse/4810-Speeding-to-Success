@@ -59,26 +59,26 @@ write.csv(route_runners %>% select(nflId), "data/route_runner_Ids.csv", row.name
 all route runners + combine stats 
 ```{r}
 
-combine <- combine %>%
-  separate(Ht, into = c("feet", "inches"), sep = "-", convert = TRUE) %>%
+route_runners <- route_runners %>%
+  separate(height, into = c("feet", "inches"), sep = "-", convert = TRUE) %>%
   mutate(total_inches = feet * 12 + inches) %>%
-  select(-feet, -inches) %>% 
-  rename('weight' = Wt)
+  select(-feet, -inches)
+
 
 
 # TODO need to impute here, can still check things on original data below but imputating should happen before filtering
 
-scaled_combine <- combine %>% mutate_at(c("weight","total_inches", "X40yd","X3Cone","Shuttle"), ~(scale(.) %>% as.vector))
+scaled_combine <- combine %>% mutate_at(c("X40yd","X3Cone","Shuttle"), ~(scale(.) %>% as.vector))
 
 route_runners_combine <- stringdist_left_join(
   x = route_runners,
   y = scaled_combine,
   by = c('displayName' = 'Player'),
   distance_col = 'string_dist') %>%
-  rename('weight' = weight.y) %>% 
   select(nflId,n_routes,position,displayName, weight, X40yd, X3Cone, Shuttle, total_inches) %>% 
   filter(position %in% c("TE","RB","WR"))
 
+route_runners_combine <- route_runners_combine %>% mutate_at(c("weight","total_inches"), ~(scale(.) %>% as.vector))
 
 route_runners_combine <- dummy_cols(route_runners_combine, select_columns = "position", remove_first_dummy = F, remove_selected_columns = T)
 ```
@@ -86,36 +86,56 @@ route_runners_combine <- dummy_cols(route_runners_combine, select_columns = "pos
 
 looking at how missing values correlate with players performance (measured by number of routes ran)
 ```{r}
+
+colMeans(is.na(route_runners_combine %>% select(c("X40yd","X3Cone","Shuttle"))))
+# missing % for all route runners
+#    X40yd    X3Cone   Shuttle 
+#0.3453390 0.5741525 0.5466102 
+colMeans(is.na(two_missing_max %>% select(c("X40yd","X3Cone","Shuttle"))))
+# missing % for route runners missing at most speed times
+#     X40yd     X3Cone    Shuttle 
+#0.01592357 0.35987261 0.31847134 
+
+count(two_missing_max) / count(route_runners_combine)
+# in the end we are dropping 1/3 of our players
+
+
 # all players with missing values
 # 279
-missing_value_players <- route_runners_combine %>% filter(if_any(everything(), is.na))
-count(missing_value_players)
+any_missing_values <- route_runners_combine %>% filter(if_any(everything(), is.na))
+count(any_missing_values) / count(route_runners_combine) 
+# 59% of players have at least one missing value
 
 # players with no missing values
 # 193
 full_data_players <- route_runners_combine %>% drop_na()
-count(full_data_players)
+count(full_data_players) / count(route_runners_combine)
+# 41% of players have no missing values
+
 
 # players with 2 or less missing values
 # 314
-two_missing_max <- route_runners_combine %>% filter(rowSums(is.na(.)) <= 2)
-count(two_missing_max)
+two_missing_max <- route_runners_combine %>% filter(rowSums(is.na(select(.,"X40yd","X3Cone","Shuttle"))) <= 2)
+count(two_missing_max) / count(route_runners_combine)
+# 67% of players have 
 
 # players with no combine speed stats
 # 158
-all_missing <- route_runners_combine %>% filter(rowSums(is.na(.)) == 3)
-count(all_missing)
+all_missing <- route_runners_combine %>% filter(rowSums(is.na(select(.,"X40yd","X3Cone","Shuttle"))) == 3)
+count(all_missing) / count(route_runners_combine)
+# 33% missing
+
 
 df1 <- route_runners_combine %>% select(n_routes) %>% mutate(cat = 'all players')
 df2 <- full_data_players %>% select(n_routes) %>% mutate(cat = "0 missing")
-#df3 <- missing_value_players %>% select(n_routes) %>% mutate(cat = "1,2,3 missing")
 df4 <- two_missing_max %>% select(n_routes) %>% mutate(cat = "up to 2 missing")
 df5 <- all_missing %>% select(n_routes) %>%  mutate(cat = "all 3 missing")
+df3 <- any_missing_values %>% select(n_routes) %>% mutate(cat = "at least one missing")
 
 
-df_combined <- bind_rows(df1,df2,df4,df5)
+df_combined <- bind_rows(df2,df4,df5,df3)
                          
-df_combined$cat <- factor(df_combined$cat, levels = c("all players", "0 missing", "up to 2 missing", 'all 3 missing'))
+df_combined$cat <- factor(df_combined$cat, levels = c("0 missing", "up to 2 missing", 'all 3 missing',"at least one missing"))
 
 # Create the violin plot
 p = ggplot(df_combined, aes(x = cat, y = n_routes, fill = cat)) +
@@ -137,16 +157,20 @@ all_players <- as.numeric(unlist(df1['n_routes']))
 full_combine_players <- as.numeric(unlist(df2['n_routes']))
 missing_2_max_combine <- as.numeric(unlist(df4['n_routes']))
 all_missing_players <- as.numeric(unlist(df5['n_routes']))
+missing_value_players <- as.numeric(unlist(df3["n_routes"]))
 
 
 hist(all_players)
 hist(full_combine_players)
 hist(missing_2_max_combine)
 hist(all_missing_players)
+hist(missing_value_players)
 
 wilcox.test(full_combine_players, missing_2_max_combine, paired = FALSE)
 
-wilcox.test(full_combine_players, all_players, paired = FALSE)
+wilcox.test(full_combine_players, missing_value_players, paired = FALSE)
+
+wilcox.test(full_combine_players, all_missing_players, paired = FALSE)
 
 
 ```
@@ -157,24 +181,13 @@ we see that there is not a statistically significant difference in the number of
 
 when imputing data we want to impute as little of our data as we can, if we use the all players we will be imputing a lot of data, for example 57% of the 3 cone data. however if we limit ourselves to players missing 2 drills we can limit how much data has to be imputed by almost 2/3s.
 ```{r}
-colMeans(is.na(route_runners_combine))
-colMeans(is.na(two_missing_max))
-
-sum(is.na(route_runners_combine))
-sum(is.na(two_missing_max))
-
-
-#vif_values <- vif(lm(y ~ ., data = two_missing_max, na.action = na.omit))
-#vif_values
-
 
 mcar_test(two_missing_max %>% select(c('weight','X40yd','X3Cone','Shuttle','total_inches')))
 
 
-imputed_df <- mice(two_missing_max %>% select(c('weight','X40yd','X3Cone','Shuttle','total_inches')), method = "cart")
+imputed_df <- mice(two_missing_max %>% select(c('weight','X40yd','X3Cone','Shuttle','total_inches')), method = "norm.predict")
 plot(imputed_df)
 densityplot(imputed_df)
-
 
 imputed_rr_combine <- complete(imputed_df)
 
@@ -233,23 +246,29 @@ hist(player_aggregated_openess$mean)
 
 ```{r}
 
-
 double_mean_openess_and_combine <- right_join(
   x = player_aggregated_openess,
   y = imputed_rr_combine,
   by = c('nflId'),
 ) %>% filter(count >= 1) %>% select(-c('count','displayName'))
 
-# can also look at bmi as height and weight are highly colinear, however we can see diffrent results for height and weight when looking at positions, ie. for one position we see you want to be shorter and heavier, but for another you want to be taller and heavier
-
-# double_mean_openess_and_combine <-  double_mean_openess_and_combine %>% mutate(BMI = (weight / total_inches ^2)) %>% select(-c('weight','total_inches'))
-
-
 write.csv(double_mean_openess_and_combine, "data/double_mean_openess_and_scaled_combine.csv", row.names = FALSE)
+
+```
+
+```{r}
 
 df_wr <- double_mean_openess_and_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
 df_rb <- double_mean_openess_and_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
 df_te <- double_mean_openess_and_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
+
+vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_wr))
+
+vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_rb))
+
+vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_te))
+
+hist(double_mean_openess_and_combine$mean)
 
 
 model_wr <- lm(mean ~ . - 1 - nflId, data = df_wr)
@@ -271,10 +290,55 @@ plot(model_te, main = "Diagnostics for TE Model")
 # could scale y values?
 
 
-
 #TODO look into repeated measures regression or mixed effect models
 
 ```
+
+
+methods
+
+weight        X40yd       X3Cone      Shuttle total_inches 
+    3.243527     1.842524     1.928836     1.876338     2.250605 
+    
+we see low vif values, so colinearity should not be an issue, we thought combine drills might be more correlated and this might be a problem for us, but this is not the case. we looked at using BMI instead of height and weight (even though vifs are still fairly low) but found that there is not enough nuance with bmi as the sign of height and weight varies depending on position. if we used bmi we would not see this
+
+
+```{r}
+
+double_mean_openess_and_full_combine <- right_join(
+  x = player_aggregated_openess,
+  y = full_data_players,
+  by = c('nflId'),
+) %>% filter(count >= 1) %>% select(-c('count','displayName'))
+
+
+df_full_wr <- double_mean_openess_and_full_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
+df_full_rb <- double_mean_openess_and_full_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
+df_full_te <- double_mean_openess_and_full_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
+
+vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_full_wr))
+
+vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_full_rb))
+
+vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_full_te))
+
+hist(double_mean_openess_and_full_combine$mean)
+
+
+model_full_wr <- lm(mean ~ . - 1 - nflId - height, data = df_full_wr)
+model_full_rb <- lm(mean ~ . - 1 - nflId, data = df_full_rb)
+model_full_te <- lm(mean ~ . - 1 - nflId, data = df_full_te)
+
+summary(model_full_wr)
+
+summary(model_full_rb)
+
+summary(model_full_te)
+
+
+
+```
+
 
 ```{r}
 
@@ -357,7 +421,7 @@ model_te <- lmer(mean.y ~ weight + X40yd + X3Cone + Shuttle + total_inches +
                  data = df_te)
 
 summary(model_wr)
-  summary(model_rb)
+summary(model_rb)
 summary(model_te)
 
 
