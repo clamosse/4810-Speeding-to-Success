@@ -23,6 +23,7 @@ library(lme4)
 library(caret)
 library(broom)
 library(ggplot2)
+library(purrr)
 ```
 
 
@@ -240,40 +241,44 @@ imputed_rr_combine
 ```{r}
 player_aggregated_openess <- read.csv('data/player_aggregated2.csv')
 
+
+player_aggregated_openess_9 <- read.csv('9_week_player_aggregated.csv')
+
 hist(player_aggregated_openess$mean)
+hist(player_aggregated_openess_9$mean)
 ```
-
+  
 
 ```{r}
-
+  
 double_mean_openess_and_combine <- right_join(
-  x = player_aggregated_openess,
-  y = imputed_rr_combine,
-  by = c('nflId'),
-) %>% filter(count >= 1) %>% select(-c('count','displayName'))
-
+    x = player_aggregated_openess_9,
+    y = imputed_rr_combine,
+    by = c('nflId'),
+) %>% filter(count >= 1) %>% select(-c('n_routes'))
+  
 write.csv(double_mean_openess_and_combine, "data/double_mean_openess_and_scaled_combine.csv", row.names = FALSE)
-
+  
 ```
-
+  
 ```{r}
-
-df_wr <- double_mean_openess_and_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
-df_rb <- double_mean_openess_and_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
-df_te <- double_mean_openess_and_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
-
+  
+df_wr <- double_mean_openess_and_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_rb <- double_mean_openess_and_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_te <- double_mean_openess_and_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+  
 vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_wr))
-
+  
 vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_rb))
-
+  
 vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_te))
-
+  
 hist(double_mean_openess_and_combine$mean)
-
-
-model_wr <- lm(mean ~ . - 1 - nflId, data = df_wr)
-model_rb <- lm(mean ~ . - 1 - nflId, data = df_rb)
-model_te <- lm(mean ~ . - 1 - nflId, data = df_te)
+  
+  
+model_wr <- lm(mean ~ . - 1 - nflId - count - displayName, data = df_wr, weights = count)
+model_rb <- lm(mean ~ . - 1 - nflId - count - displayName, data = df_rb, weights = count)
+model_te <- lm(mean ~ . - 1 - nflId - count - displayName, data = df_te, weights = count)
 
 summary(model_wr)
 
@@ -290,31 +295,23 @@ plot(model_te, main = "Diagnostics for TE Model")
 # could scale y values?
 
 
-#TODO look into repeated measures regression or mixed effect models
 
 ```
 
 
-methods
-
-weight        X40yd       X3Cone      Shuttle total_inches 
-    3.243527     1.842524     1.928836     1.876338     2.250605 
-    
-we see low vif values, so colinearity should not be an issue, we thought combine drills might be more correlated and this might be a problem for us, but this is not the case. we looked at using BMI instead of height and weight (even though vifs are still fairly low) but found that there is not enough nuance with bmi as the sign of height and weight varies depending on position. if we used bmi we would not see this
-
-
+sensitiviy analysis
 ```{r}
 
 double_mean_openess_and_full_combine <- right_join(
-  x = player_aggregated_openess,
+  x = player_aggregated_openess_9,
   y = full_data_players,
   by = c('nflId'),
-) %>% filter(count >= 1) %>% select(-c('count','displayName'))
+) %>% filter(count >= 1) %>% select(-c("n_routes"))
 
 
-df_full_wr <- double_mean_openess_and_full_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
-df_full_rb <- double_mean_openess_and_full_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
-df_full_te <- double_mean_openess_and_full_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR","n_routes"))
+df_full_wr <- double_mean_openess_and_full_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_full_rb <- double_mean_openess_and_full_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_full_te <- double_mean_openess_and_full_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR"))
 
 vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_full_wr))
 
@@ -324,10 +321,10 @@ vif(lm(mean ~ weight + X40yd + X3Cone + Shuttle + total_inches, data = df_full_t
 
 hist(double_mean_openess_and_full_combine$mean)
 
+model_full_wr <- lm(mean ~ . - 1 - nflId - count - displayName, data = df_full_wr, weights = count)
+model_full_rb <- lm(mean ~ . - 1 - nflId - count - displayName, data = df_full_rb, weights = count)
+model_full_te <- lm(mean ~ . - 1 - nflId - count - displayName, data = df_full_te, weights = count)
 
-model_full_wr <- lm(mean ~ . - 1 - nflId - height, data = df_full_wr)
-model_full_rb <- lm(mean ~ . - 1 - nflId, data = df_full_rb)
-model_full_te <- lm(mean ~ . - 1 - nflId, data = df_full_te)
 
 summary(model_full_wr)
 
@@ -342,30 +339,37 @@ summary(model_full_te)
 
 ```{r}
 
-tidy_wr <- tidy(model_wr)
-tidy_rb <- tidy(model_rb)
-tidy_te <- tidy(model_te)
+tidy_all <- rbind(
+  tidy_wr %>% mutate(position = "WR"),
+  tidy_rb %>% mutate(position = "RB"),
+  tidy_te %>% mutate(position = "TE")
+) %>%
+  mutate(significant = p.value < 0.05/15)
 
-tidy_wr$position <- "WR"
-tidy_rb$position <- "RB"
-tidy_te$position <- "TE"
-
-tidy_all <- rbind(tidy_wr, tidy_rb, tidy_te)
-
-p = ggplot(tidy_all, aes(x = term, y = estimate, color = position)) +
-  geom_point(position = position_dodge(width = 0.5)) +
-  geom_errorbar(aes(ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error),
-                width = 0.2, position = position_dodge(width = 0.5)) +
+# Plot
+p <- ggplot(tidy_all, aes(x = term, y = estimate, color = position, group = position)) +
+  geom_point(aes(shape = significant), position = position_dodge(width = 0.6), size = 3) +
+  geom_errorbar(
+    aes(ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error),
+    width = 0.2,
+    position = position_dodge(width = 0.6)
+  ) +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1)) +  # filled = sig, hollow = not
   coord_flip() +
-  labs(title = "Simple LM Regression Coefficients by Position",
-       x = "Predictor",
-       y = "Estimated Coefficient") +
+  labs(
+    title = "Simple LM Regression Coefficients by Position",
+    subtitle = "Filled dots indicate p < 0.05",
+    x = "Predictor",
+    y = "Estimated Coefficient",
+    shape = "Significant"
+  ) +
   theme_minimal()
 
-p 
+p
 
-
+# Save plot
 ggsave("Pre Exploratory Graphs/LM_regression_coefficients_by_position.png", plot = p, width = 8, height = 6, dpi = 300)
+
 
 ```
 
@@ -379,7 +383,8 @@ ggsave("Pre Exploratory Graphs/LM_regression_coefficients_by_position.png", plot
 ```{r}
 player_per_play_openess <- read.csv('data/play_aggregated2.csv')
 
-player_play
+player_per_play_openess_9 <- read.csv('9_week_play_aggregated.csv')
+
 ```
 
 
@@ -387,44 +392,206 @@ player_play
 ```{r}
 
 player_combine_opennes_per_play <- left_join(
-  x = player_per_play_openess,
-  y = scaled_data,
-  by = c('nflId'),
-) %>% filter(n_routes >= 1) %>% select(-c(,'X','mean.x','n_routes'))
+  x = player_per_play_openess_9,
+  y = imputed_rr_combine,
+  by = "nflId",
+) %>% filter(n_routes >= 1)
 
 
 player_combine_opennes_per_play <- left_join(
   x = player_combine_opennes_per_play,
   y = player_play,
   by = c('gameId','playId','nflId'),
-) %>% select(c('mean.y','position_RB','position_TE','position_WR',"weight","X40yd","X3Cone","Shuttle","total_inches","routeRan","nflId"))
+) %>% select(c('openness','position_RB','position_TE','position_WR',"weight","X40yd","X3Cone","Shuttle","total_inches","routeRan","nflId"))
 
-player_combine_opennes_per_play <- dummy_cols(player_combine_opennes_per_play, select_columns = "routeRan.x", remove_first_dummy = F, remove_selected_columns = T)
+#player_combine_opennes_per_play <- dummy_cols(player_combine_opennes_per_play, select_columns = "routeRan", remove_first_dummy = F, remove_selected_columns = T)
 
+double_mean_openess_by_route_and_combine <- player_combine_opennes_per_play %>%
+  group_by(nflId, routeRan) %>%
+  summarise(openness = mean(openness),
+            count = n()) %>% 
+  left_join(player_combine_opennes_per_play %>% 
+              distinct(nflId, routeRan, .keep_all = T),
+              by = c("nflId","routeRan")) %>% 
+  select(-c(openness.y)) %>% 
+  rename(openness = "openness.x")
 
-colSums(player_combine_opennes_per_play)
-
-df_wr <- player_combine_opennes_per_play %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR"))
-df_rb <- player_combine_opennes_per_play %>% filter(position_RB == 1)%>% select(-c("position_RB","position_TE","position_WR"))
-df_te <- player_combine_opennes_per_play %>% filter(position_TE == 1)%>% select(-c("position_RB","position_TE","position_WR"))
-
-model_wr <- lmer(mean.y ~ (weight + X40yd + X3Cone + Shuttle + total_inches) * routeRan
-                + (1 | nflId), data = df_wr)
-
-model_rb <- lmer(mean.y ~ weight + X40yd + X3Cone + Shuttle + total_inches +
-                 dummy_routeRan1 + dummy_routeRan2 + ... +
-                 (1 | nflId),
-                 data = df_rb)
-model_te <- lmer(mean.y ~ weight + X40yd + X3Cone + Shuttle + total_inches +
-                 dummy_routeRan1 + dummy_routeRan2 + ... +
-                 (1 | nflId),
-                 data = df_te)
-
-summary(model_wr)
-summary(model_rb)
-summary(model_te)
+```
 
 
+```{r}
+# TODO find better cutoff to midigate p hacking
+df_wr <- double_mean_openess_by_route_and_combine %>% filter(position_WR == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_wr %>% group_by(routeRan) %>%
+  count(routeRan, sort = TRUE)
 
+top_routes <- df_wr %>%
+  group_by(routeRan) %>% 
+  count(routeRan, sort = TRUE) %>% 
+  filter(n > 90) %>% 
+  pull(routeRan)
+
+
+route_models <- top_routes %>%
+  set_names() %>%
+  map(function(route) {
+    df_wr %>%
+      filter(routeRan == route) %>%
+      select(-routeRan) %>%
+      lm(openness ~ . - 1 - nflId - count, data = ., weights = count)
+  })
+
+model_summaries <- route_models %>%
+  map_df(tidy, .id = "route")
+
+
+all_terms <- model_summaries %>% distinct(term) %>% pull(term)
+all_routes <- model_summaries %>% distinct(route) %>% pull(route)
+full_grid <- expand.grid(route = all_routes, term = all_terms, stringsAsFactors = FALSE)
+
+# 2. Join and fill missing values with NA
+model_summaries_complete <- full_grid %>%
+  left_join(model_summaries, by = c("route", "term")) %>%
+  mutate(significant = ifelse(is.na(p.value), FALSE, p.value < 0.05 / 25))
+
+# 3. Plot
+wr_model_summaries_route <- ggplot(model_summaries_complete, aes(x = term, y = estimate, color = route, group = route)) +
+  geom_point(aes(shape = significant), position = position_dodge(width = 0.6), size = 3) +
+  geom_errorbar(
+    aes(ymin = estimate - std.error, ymax = estimate + std.error),
+    position = position_dodge(width = 0.6),
+    width = 0.2
+  ) +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1)) +
+  labs(
+    title = "Wide Receiver Coefficient Estimates by Route Type (>90 routes ran)",
+    subtitle = "Filled dots indicate p < .05/25",
+    x = "Predictor",
+    y = "Estimate ± SE",
+    shape = "Significant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+ggsave("Pre Exploratory Graphs/LM_regression_coefficients_WR_by_routeRan.png", plot = wr_model_summaries_route, width = 8, height = 6, dpi = 300)
+
+
+df_rb <- double_mean_openess_by_route_and_combine %>% filter(position_RB == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_rb %>% group_by(routeRan) %>%
+  count(routeRan, sort = TRUE)
+
+top_routes <- df_rb %>%
+  group_by(routeRan) %>% 
+  count(routeRan, sort = TRUE) %>% 
+  filter(n > 45) %>% 
+  pull(routeRan)
+
+
+route_models <- top_routes %>%
+  set_names() %>%
+  map(function(route) {
+    df_rb %>%
+      filter(routeRan == route) %>%
+      select(-routeRan) %>%
+      lm(openness ~ . - 1 - nflId - count, data = ., weights = count)
+  })
+
+model_summaries <- route_models %>%
+  map_df(tidy, .id = "route")
+
+all_terms <- model_summaries %>% distinct(term) %>% pull(term)
+all_routes <- model_summaries %>% distinct(route) %>% pull(route)
+full_grid <- expand.grid(route = all_routes, term = all_terms, stringsAsFactors = FALSE)
+
+# 2. Join and fill missing values with NA
+model_summaries_complete <- full_grid %>%
+  left_join(model_summaries, by = c("route", "term")) %>%
+  mutate(significant = ifelse(is.na(p.value), FALSE, p.value < 0.05 / 25))
+
+# 3. Plot
+rb_model_summaries_route <- ggplot(model_summaries_complete, aes(x = term, y = estimate, color = route, group = route)) +
+  geom_point(aes(shape = significant), position = position_dodge(width = 0.6), size = 3) +
+  geom_errorbar(
+    aes(ymin = estimate - std.error, ymax = estimate + std.error),
+    position = position_dodge(width = 0.6),
+    width = 0.2
+  ) +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1)) +
+  labs(
+    title = "Running Back Coefficient Estimates by Route Type (>45 routes ran)",
+    subtitle = "Filled dots indicate p < 0.05/25",
+    x = "Predictor",
+    y = "Estimate ± SE",
+    shape = "Significant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("Pre Exploratory Graphs/LM_regression_coefficients_RB_by_routeRan.png", plot = rb_model_summaries_route, width = 8, height = 6, dpi = 300)
+
+
+df_te <- double_mean_openess_by_route_and_combine %>% filter(position_TE == 1) %>% select(-c("position_RB","position_TE","position_WR"))
+df_te %>% group_by(routeRan) %>%
+  count(routeRan, sort = TRUE)
+
+top_routes <- df_te %>%
+  group_by(routeRan) %>% 
+  count(routeRan, sort = TRUE) %>% 
+  filter(n > 50) %>% 
+  pull(routeRan)
+
+
+route_models <- top_routes %>%
+  set_names() %>%
+  map(function(route) {
+    df_te %>%
+      filter(routeRan == route) %>%
+      select(-routeRan) %>%
+      lm(openness ~ . - 1 - nflId - count, data = ., weights = count)
+  })
+
+model_summaries <- route_models %>%
+  map_df(tidy, .id = "route")
+
+
+all_terms <- model_summaries %>% distinct(term) %>% pull(term)
+all_routes <- model_summaries %>% distinct(route) %>% pull(route)
+full_grid <- expand.grid(route = all_routes, term = all_terms, stringsAsFactors = FALSE)
+
+# 2. Join and fill missing values with NA
+model_summaries_complete <- full_grid %>%
+  left_join(model_summaries, by = c("route", "term")) %>%
+  mutate(significant = ifelse(is.na(p.value), FALSE, p.value < 0.05 / 25))
+
+# 3. Plot
+te_model_summaries_route <- ggplot(model_summaries_complete, aes(x = term, y = estimate, color = route, group = route)) +
+  geom_point(aes(shape = significant), position = position_dodge(width = 0.6), size = 3) +
+  geom_errorbar(
+    aes(ymin = estimate - std.error, ymax = estimate + std.error),
+    position = position_dodge(width = 0.6),
+    width = 0.2
+  ) +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1)) +
+  labs(
+    title = "Tight End Coefficient Estimates by Route Type (>50 routes ran)",
+    subtitle = "Filled dots indicate p < 0.05/25",
+    x = "Predictor",
+    y = "Estimate ± SE",
+    shape = "Significant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("Pre Exploratory Graphs/LM_regression_coefficients_TE_by_routeRan.png", plot = te_model_summaries_route, width = 8, height = 6, dpi = 300)
+
+```
+
+
+```{r}
+
+wr_model_summaries_route
+rb_model_summaries_route
+te_model_summaries_route
 
 ```
